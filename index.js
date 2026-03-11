@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const path = require('path');
 require('dotenv').config();
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -16,17 +15,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme-secret';
-const DATA_SECRET = process.env.DATA_SECRET || 'user-data-secret';
+const PORT = process.env.PORT || 5000;
+
+const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+const DATA_SECRET = process.env.DATA_SECRET || 'secret';
 
 
-/* ---------------- MULTER (memory storage for vercel) ---------------- */
-
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-
-/* ---------------- MongoDB ---------------- */
+/* ================= MONGODB ================= */
 
 let isConnected = false;
 
@@ -35,7 +30,8 @@ async function connectDB() {
   if (isConnected) return;
 
   if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI missing");
+    console.log("No Mongo URI");
+    throw new Error("Mongo missing");
   }
 
   await mongoose.connect(process.env.MONGO_URI);
@@ -43,87 +39,76 @@ async function connectDB() {
   isConnected = true;
 
   console.log("Mongo connected");
-
 }
 
 
-/* ---------------- USER MODEL ---------------- */
+/* ================= MULTER ================= */
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+
+/* ================= MODELS ================= */
 
 const userSchema = new mongoose.Schema({
-
   name: String,
   email: { type: String, unique: true },
   passwordHash: String,
-
-  reminderEnd: Date,
-  reminderSent: { type: Boolean, default: false },
-
   createdAt: { type: Date, default: Date.now }
-
 });
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User =
+  mongoose.models.User ||
+  mongoose.model("User", userSchema);
 
-
-/* ---------------- BENEFICIARY MODEL ---------------- */
 
 const beneficiarySchema = new mongoose.Schema({
-
   userId: mongoose.Schema.Types.ObjectId,
   name: String,
   email: String
-
 });
 
 const Beneficiary =
   mongoose.models.Beneficiary ||
-  mongoose.model('Beneficiary', beneficiarySchema);
+  mongoose.model("Beneficiary", beneficiarySchema);
 
-
-/* ---------------- MEDICAL MODEL ---------------- */
 
 const medicalSchema = new mongoose.Schema({
-
   userId: mongoose.Schema.Types.ObjectId,
   doctorName: String,
   prescriptions: String,
-  medicalReport: String,
-
-  createdAt: { type: Date, default: Date.now }
-
+  medicalReport: String
 });
 
 const MedicalInfo =
   mongoose.models.MedicalInfo ||
-  mongoose.model('MedicalInfo', medicalSchema);
+  mongoose.model("MedicalInfo", medicalSchema);
 
-
-/* ---------------- PRIVATE DATA ---------------- */
 
 const privateSchema = new mongoose.Schema({
-
   userId: mongoose.Schema.Types.ObjectId,
-  encryptedData: String,
-  updatedAt: Date
-
+  encryptedData: String
 });
 
 const UserPrivateData =
   mongoose.models.UserPrivateData ||
-  mongoose.model('UserPrivateData', privateSchema);
+  mongoose.model("UserPrivateData", privateSchema);
 
 
-/* ---------------- AUTH ---------------- */
+/* ================= AUTH ================= */
 
 const authMiddleware = (req, res, next) => {
 
-  const token = req.headers.authorization?.split(" ")[1];
+  const token =
+    req.headers.authorization?.split(" ")[1];
 
-  if (!token) return res.status(401).json({ error: "No token" });
+  if (!token)
+    return res.status(401).json({ error: "No token" });
 
   try {
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded =
+      jwt.verify(token, JWT_SECRET);
 
     req.user = { id: decoded.id };
 
@@ -134,11 +119,10 @@ const authMiddleware = (req, res, next) => {
     res.status(401).json({ error: "Invalid token" });
 
   }
-
 };
 
 
-/* ---------------- EMAIL ---------------- */
+/* ================= EMAIL ================= */
 
 const transporter = nodemailer.createTransport({
 
@@ -151,19 +135,8 @@ const transporter = nodemailer.createTransport({
 
 });
 
-async function sendEmail(to, subject, text) {
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to,
-    subject,
-    text
-  });
-
-}
-
-
-/* ---------------- AUTH ROUTES ---------------- */
+/* ================= AUTH ================= */
 
 app.post("/api/auth/register", async (req, res) => {
 
@@ -171,12 +144,14 @@ app.post("/api/auth/register", async (req, res) => {
 
   const { name, email, password } = req.body;
 
-  const existing = await User.findOne({ email });
+  const existing =
+    await User.findOne({ email });
 
   if (existing)
-    return res.status(400).json({ error: "Email exists" });
+    return res.json({ error: "Exists" });
 
-  const hash = await bcrypt.hash(password, 10);
+  const hash =
+    await bcrypt.hash(password, 10);
 
   await new User({
     name,
@@ -195,52 +170,54 @@ app.post("/api/auth/login", async (req, res) => {
 
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
+  const user =
+    await User.findOne({ email });
 
   if (!user)
-    return res.status(400).json({ error: "Invalid" });
+    return res.json({ error: "Invalid" });
 
-  const match = await bcrypt.compare(
-    password,
-    user.passwordHash
-  );
+  const ok =
+    await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
 
-  if (!match)
-    return res.status(400).json({ error: "Invalid" });
+  if (!ok)
+    return res.json({ error: "Invalid" });
 
-  const token = jwt.sign(
-    { id: user._id },
-    JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+  const token =
+    jwt.sign(
+      { id: user._id },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
 
   res.json({ token });
 
 });
 
 
-/* ---------------- MEDICAL ---------------- */
+/* ================= MEDICAL ================= */
 
 app.post(
   "/api/medical-info",
   authMiddleware,
-  upload.single("medicalReportsFile"),
+  upload.single("file"),
   async (req, res) => {
 
     await connectDB();
 
-    const record = new MedicalInfo({
+    const record =
+      new MedicalInfo({
 
-      userId: req.user.id,
+        userId: req.user.id,
 
-      doctorName: req.body.doctorName,
-      prescriptions: req.body.prescriptions,
+        doctorName: req.body.doctorName,
+        prescriptions: req.body.prescriptions,
 
-      medicalReport: req.file
-        ? req.file.originalname
-        : null
-
-    });
+        medicalReport:
+          req.file?.originalname || null
+      });
 
     await record.save();
 
@@ -257,18 +234,18 @@ app.get(
 
     await connectDB();
 
-    const records =
+    const data =
       await MedicalInfo.find({
         userId: req.user.id
       });
 
-    res.json(records);
+    res.json(data);
 
   }
 );
 
 
-/* ---------------- BENEFICIARIES ---------------- */
+/* ================= BENEFICIARY ================= */
 
 app.post(
   "/api/beneficiaries",
@@ -277,17 +254,15 @@ app.post(
 
     await connectDB();
 
-    const b = new Beneficiary({
+    await new Beneficiary({
 
       userId: req.user.id,
       name: req.body.name,
       email: req.body.email
 
-    });
+    }).save();
 
-    await b.save();
-
-    res.json({ message: "Added" });
+    res.json({ ok: true });
 
   }
 );
@@ -311,7 +286,7 @@ app.get(
 );
 
 
-/* ---------------- USER DATA ---------------- */
+/* ================= USER DATA ================= */
 
 app.post(
   "/api/user-data",
@@ -322,93 +297,70 @@ app.post(
 
     const encrypted =
       CryptoJS.AES.encrypt(
-        JSON.stringify(req.body.data),
+        JSON.stringify(req.body),
         DATA_SECRET
       ).toString();
 
     await UserPrivateData.findOneAndUpdate(
       { userId: req.user.id },
-      {
-        encryptedData: encrypted,
-        updatedAt: new Date()
-      },
+      { encryptedData: encrypted },
       { upsert: true }
     );
 
-    res.json({ success: true });
+    res.json({ ok: true });
 
   }
 );
 
 
-app.get(
-  "/api/user-data",
-  authMiddleware,
-  async (req, res) => {
+/* ================= AI ================= */
 
-    await connectDB();
-
-    const record =
-      await UserPrivateData.findOne({
-        userId: req.user.id
-      });
-
-    if (!record) return res.json(null);
-
-    const bytes =
-      CryptoJS.AES.decrypt(
-        record.encryptedData,
-        DATA_SECRET
-      );
-
-    const data =
-      JSON.parse(
-        bytes.toString(CryptoJS.enc.Utf8)
-      );
-
-    res.json(data);
-
-  }
-);
-
-
-/* ---------------- AI ---------------- */
-
-const gemini = new GoogleGenerativeAI(
-  process.env.GEMINI_API_KEY || ""
-);
+const gemini =
+  new GoogleGenerativeAI(
+    process.env.GEMINI_API_KEY || ""
+  );
 
 app.post("/api/ai-chat", async (req, res) => {
 
-  if (!process.env.GEMINI_API_KEY) {
-    return res.json({
-      response: "AI not configured"
-    });
-  }
+  if (!process.env.GEMINI_API_KEY)
+    return res.json({ response: "No key" });
 
   const model =
     gemini.getGenerativeModel({
       model: "gemini-1.5-flash"
     });
 
-  const result =
+  const r =
     await model.generateContent(
       req.body.message
     );
 
   res.json({
     response:
-      result.response.text()
+      r.response.text()
   });
 
 });
 
 
-/* ---------------- ROOT ---------------- */
+/* ================= ROOT ================= */
 
 app.get("/", (req, res) => {
   res.send("API running");
 });
 
+
+/* ================= LOCAL SERVER ================= */
+
+if (process.env.NODE_ENV !== "production") {
+
+  app.listen(PORT, () => {
+    console.log("Server running " + PORT);
+  });
+
+}
+
+
+/* ================= EXPORT FOR VERCEL ================= */
 
 module.exports = app;
