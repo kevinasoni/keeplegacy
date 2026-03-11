@@ -15,8 +15,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 5000;
-
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 const DATA_SECRET = process.env.DATA_SECRET || 'secret';
 
@@ -30,19 +28,16 @@ async function connectDB() {
   if (isConnected) return;
 
   if (!process.env.MONGO_URI) {
-    console.log("No Mongo URI");
     throw new Error("Mongo missing");
   }
 
   await mongoose.connect(process.env.MONGO_URI);
 
   isConnected = true;
-
-  console.log("Mongo connected");
 }
 
 
-/* ================= MULTER ================= */
+/* ================= MULTER (VERCEL SAFE) ================= */
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -343,24 +338,9 @@ app.post("/api/ai-chat", async (req, res) => {
 });
 
 
-/* ================= ROOT ================= */
-
 app.get("/", (req, res) => {
   res.send("API running");
 });
 
-
-/* ================= LOCAL SERVER ================= */
-
-if (process.env.NODE_ENV !== "production") {
-
-  app.listen(PORT, () => {
-    console.log("Server running " + PORT);
-  });
-
-}
-
-
-/* ================= EXPORT FOR VERCEL ================= */
 
 module.exports = app;
