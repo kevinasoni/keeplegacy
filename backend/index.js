@@ -37,7 +37,7 @@ async function connectDB() {
 }
 
 
-/* ================= MULTER (VERCEL SAFE) ================= */
+/* ================= MULTER ================= */
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -117,21 +117,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 
-/* ================= EMAIL ================= */
-
-const transporter = nodemailer.createTransport({
-
-  service: "gmail",
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-
-});
-
-
-/* ================= AUTH ================= */
+/* ================= AUTH ROUTES ================= */
 
 app.post("/api/auth/register", async (req, res) => {
 
@@ -188,152 +174,6 @@ app.post("/api/auth/login", async (req, res) => {
     );
 
   res.json({ token });
-
-});
-
-
-/* ================= MEDICAL ================= */
-
-app.post(
-  "/api/medical-info",
-  authMiddleware,
-  upload.single("file"),
-  async (req, res) => {
-
-    await connectDB();
-
-    const record =
-      new MedicalInfo({
-
-        userId: req.user.id,
-
-        doctorName: req.body.doctorName,
-        prescriptions: req.body.prescriptions,
-
-        medicalReport:
-          req.file?.originalname || null
-      });
-
-    await record.save();
-
-    res.json(record);
-
-  }
-);
-
-
-app.get(
-  "/api/medical-info",
-  authMiddleware,
-  async (req, res) => {
-
-    await connectDB();
-
-    const data =
-      await MedicalInfo.find({
-        userId: req.user.id
-      });
-
-    res.json(data);
-
-  }
-);
-
-
-/* ================= BENEFICIARY ================= */
-
-app.post(
-  "/api/beneficiaries",
-  authMiddleware,
-  async (req, res) => {
-
-    await connectDB();
-
-    await new Beneficiary({
-
-      userId: req.user.id,
-      name: req.body.name,
-      email: req.body.email
-
-    }).save();
-
-    res.json({ ok: true });
-
-  }
-);
-
-
-app.get(
-  "/api/beneficiaries",
-  authMiddleware,
-  async (req, res) => {
-
-    await connectDB();
-
-    const list =
-      await Beneficiary.find({
-        userId: req.user.id
-      });
-
-    res.json(list);
-
-  }
-);
-
-
-/* ================= USER DATA ================= */
-
-app.post(
-  "/api/user-data",
-  authMiddleware,
-  async (req, res) => {
-
-    await connectDB();
-
-    const encrypted =
-      CryptoJS.AES.encrypt(
-        JSON.stringify(req.body),
-        DATA_SECRET
-      ).toString();
-
-    await UserPrivateData.findOneAndUpdate(
-      { userId: req.user.id },
-      { encryptedData: encrypted },
-      { upsert: true }
-    );
-
-    res.json({ ok: true });
-
-  }
-);
-
-
-/* ================= AI ================= */
-
-const gemini =
-  new GoogleGenerativeAI(
-    process.env.GEMINI_API_KEY || ""
-  );
-
-app.post("/api/ai-chat", async (req, res) => {
-
-  if (!process.env.GEMINI_API_KEY)
-    return res.json({ response: "No key" });
-
-  const model =
-    gemini.getGenerativeModel({
-      model: "gemini-1.5-flash"
-    });
-
-  const r =
-    await model.generateContent(
-      req.body.message
-    );
-
-  res.json({
-    response:
-      r.response.text()
-  });
 
 });
 
