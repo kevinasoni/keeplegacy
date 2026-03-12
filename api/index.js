@@ -342,6 +342,6 @@ app.get("/", (req, res) => {
   res.send("API running");
 });
 
-const app = require("../index");
+const app = require("../backend/index");
 
 module.exports = app;
